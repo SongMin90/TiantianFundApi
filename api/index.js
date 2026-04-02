@@ -1,27 +1,35 @@
 const koa = require('koa');
 const Router = require('@koa/router');
-const { log } = require('../src/utils/log');
-const { getModules } = require('../src/utils');
+const path = require('path');
+const glob = require('glob');
 
 const app = new koa();
 const router = new Router();
 
-getModules().forEach(({ fileName, path }) => {
-  const routerPath = `/${fileName}`;
-  const api = require(path);
+// 加载所有模块
+const moduleDir = path.join(__dirname, '../src/module');
+const files = glob.sync('*.js', { cwd: moduleDir });
 
-  app[fileName] = api;
+files.forEach((file) => {
+  const fileName = file.replace('.js', '');
+  const filePath = path.join(moduleDir, file);
+  const api = require(filePath);
 
-  log(`✅ 生成路由 ${routerPath}`);
+  console.log(`✅ 生成路由 /${fileName}`);
 
-  router.get(routerPath, async (ctx, next) => {
-    ctx.status = 200;
-    ctx.body = await api(ctx.request.query, ctx);
+  router.get(`/${fileName}`, async (ctx, next) => {
+    try {
+      ctx.status = 200;
+      ctx.body = await api(ctx.request.query, ctx);
+    } catch (error) {
+      ctx.status = 500;
+      ctx.body = { error: error.message };
+    }
     next();
   });
 });
 
 app.use(router.routes()).use(router.allowedMethods());
 
-// Vercel Serverless 入口 - 导出 handler
+// Vercel Serverless 入口
 module.exports = app.callback();
